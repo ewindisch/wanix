@@ -16,6 +16,14 @@ import (
 	"tractor.dev/wanix/fs/fskit"
 )
 
+// processFile exposes a host standard stream to a Wanix task without giving
+// the task ownership of the process descriptor. GoJS closes its standard fds
+// during runtime shutdown; closing os.Stdout here can discard a final pending
+// write and would also break the native host after a shell exits.
+type processFile struct{ *os.File }
+
+func (f *processFile) Close() error { return nil }
+
 // StartCommand allocates a normal Wanix auto task, binds its standard fds to
 // the native process, and starts command through the registered task driver.
 func StartCommand(root *wanix.Task, command string) (*wanix.Task, error) {
@@ -34,9 +42,9 @@ func StartCommand(root *wanix.Task, command string) (*wanix.Task, error) {
 		return nil, err
 	}
 	fds := fskit.MapFS{
-		"0": fskit.FileFS(os.Stdin, "0"),
-		"1": fskit.FileFS(os.Stdout, "1"),
-		"2": fskit.FileFS(os.Stderr, "2"),
+		"0": fskit.FileFS(&processFile{os.Stdin}, "0"),
+		"1": fskit.FileFS(&processFile{os.Stdout}, "1"),
+		"2": fskit.FileFS(&processFile{os.Stderr}, "2"),
 	}
 	// The task-scoped API resolves #task/<id>/fd through the root task table;
 	// retain the same binding in both views so GoJS syscall traffic and the
