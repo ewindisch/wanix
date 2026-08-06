@@ -35,6 +35,7 @@ import (
 	"tractor.dev/wanix"
 	"tractor.dev/wanix/api"
 	"tractor.dev/wanix/fs"
+	"tractor.dev/wanix/fs/localfs"
 	"tractor.dev/wanix/fs/memfs"
 	"tractor.dev/wanix/fs/p9kit"
 	"tractor.dev/wanix/fs/pipe"
@@ -45,6 +46,10 @@ import (
 
 // Options configures a headless Server.
 type Options struct {
+	// StateDir, when non-empty, is mounted as the root of the native Wanix
+	// namespace. It gives a standalone host durable shell state without a 9P
+	// peer. Browser hosts and transport-only callers leave it empty.
+	StateDir string
 	// APIAddr is the address of the task/API port (duplex mux/talk over CBOR).
 	// Schemes: "stdio" (the process stdin/stdout), "unix://path", "tcp://host:port".
 	// Empty disables the API port.
@@ -79,6 +84,7 @@ type Server struct {
 	Logger     *log.Logger
 	GoJSRunner string
 	NodeBinary string
+	StateDir   string
 
 	once      sync.Once
 	bootErr   error
@@ -94,6 +100,7 @@ func New(opts Options) *Server {
 		Logger:     opts.Logger,
 		GoJSRunner: opts.GoJSRunner,
 		NodeBinary: opts.NodeBinary,
+		StateDir:   opts.StateDir,
 	}
 }
 
@@ -108,7 +115,7 @@ func (s *Server) logger() *log.Logger {
 func (s *Server) root() (*wanix.Task, error) {
 	s.once.Do(func() {
 		if s.Root == nil {
-			s.Root, s.bootErr = Bootstrap()
+			s.Root, s.bootErr = BootstrapWithState(s.StateDir)
 			if s.bootErr != nil {
 				return
 			}
@@ -370,9 +377,28 @@ func (s *Server) serve9P(ctx context.Context, task *wanix.Task) error {
 // further trees over the API/ctl. This deliberately mirrors the browser
 // bootstrap in web/wasm, omitting only browser-only bindings.
 func Bootstrap() (*wanix.Task, error) {
+	return BootstrapWithState("")
+}
+
+// BootstrapWithState creates a native root and, when stateDir is supplied,
+// mounts that host directory at /. This is the standalone-shell boundary: the
+// persistent filesystem remains a Wanix namespace, not a Fersh reimplementation.
+func BootstrapWithState(stateDir string) (*wanix.Task, error) {
 	root, err := wanix.NewRoot()
 	if err != nil {
 		return nil, err
+	}
+	if stateDir != "" {
+		if err := os.MkdirAll(stateDir, 0755); err != nil {
+			return nil, fmt.Errorf("create state directory: %w", err)
+		}
+		state, err := localfs.New(stateDir)
+		if err != nil {
+			return nil, fmt.Errorf("open state directory: %w", err)
+		}
+		if err := root.NS().Bind(state, ".", "."); err != nil {
+			return nil, fmt.Errorf("mount state directory: %w", err)
+		}
 	}
 	binds := []struct {
 		dst  string

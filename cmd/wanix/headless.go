@@ -27,6 +27,7 @@ func headlessCmd() *cli.Command {
 		nodeBinary   string
 		shellCommand string
 		shellWASM    string
+		stateDir     string
 	)
 	cmd := &cli.Command{
 		Usage: "headless",
@@ -47,6 +48,7 @@ Logs always go to stderr, leaving stdin/stdout free for a stdio transport.`,
 				NinePAddr:  ninePAddr,
 				GoJSRunner: gojsRunner,
 				NodeBinary: nodeBinary,
+				StateDir:   stateDir,
 			})
 			runCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -101,6 +103,7 @@ Logs always go to stderr, leaving stdin/stdout free for a stdio transport.`,
 	cmd.Flags().StringVar(&nodeBinary, "node", "node", "Node executable for --gojs-runner")
 	cmd.Flags().StringVar(&shellCommand, "shell-command", "", "start a native Wanix task (for example: rc.wasm -c 'echo native')")
 	cmd.Flags().StringVar(&shellWASM, "shell-wasm", "", "host path to rc.wasm, installed as bin/rc.wasm before --shell-command starts")
+	cmd.Flags().StringVar(&stateDir, "state", "", "persistent native Wanix namespace directory (optional)")
 	return cmd
 }
 
