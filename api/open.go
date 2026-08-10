@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"tractor.dev/toolkit-go/duplex/rpc"
 	"tractor.dev/wanix/fs"
 )
@@ -37,19 +39,27 @@ func (s *syscaller) openFile(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	path, ok := args[0].(string)
-	if !ok {
-		panic("arg 0 is not a string")
+	if err := argCount(args, 3); err != nil {
+		r.Return(fmt.Errorf("openFile: %w", err))
+		return
 	}
 
-	flags, ok := args[1].(uint64)
-	if !ok {
-		panic("arg 1 is not a uint64")
+	path, err := stringArg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("openFile: arg 0: %w", err))
+		return
 	}
 
-	mode, ok := args[2].(uint64)
-	if !ok {
-		panic("arg 2 is not a uint64")
+	flags, err := uint64Arg(args[1])
+	if err != nil {
+		r.Return(fmt.Errorf("openFile: arg 1: %w", err))
+		return
+	}
+
+	mode, err := uint64Arg(args[2])
+	if err != nil {
+		r.Return(fmt.Errorf("openFile: arg 2: %w", err))
+		return
 	}
 
 	f, err := fs.OpenFile(s.task.NS(), path, int(flags), fs.FileMode(mode))

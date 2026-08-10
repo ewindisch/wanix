@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log"
+	"fmt"
 
 	"tractor.dev/toolkit-go/duplex/rpc"
 	"tractor.dev/wanix/fs"
@@ -11,12 +11,18 @@ func (s *syscaller) write(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	fd, ok := args[0].(uint64)
-	if !ok {
-		log.Panicf("arg 0 is not a uint64: %T %v", args[1], args[1])
+	if err := argCount(args, 2); err != nil {
+		r.Return(fmt.Errorf("write: %w", err))
+		return
 	}
 
-	f, _, err := s.task.FD(int(fd))
+	ufd, err := uint64Arg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("write: arg 0: %w", err))
+		return
+	}
+
+	f, _, err := s.task.FD(int(ufd))
 	if err != nil {
 		r.Return(err)
 		return
@@ -41,12 +47,18 @@ func (s *syscaller) writeAt(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	fd, ok := args[0].(uint64)
-	if !ok {
-		log.Panicf("arg 0 is not a uint64: %T %v", args[1], args[1])
+	if err := argCount(args, 3); err != nil {
+		r.Return(fmt.Errorf("writeAt: %w", err))
+		return
 	}
 
-	f, _, err := s.task.FD(int(fd))
+	ufd, err := uint64Arg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("writeAt: arg 0: %w", err))
+		return
+	}
+
+	f, _, err := s.task.FD(int(ufd))
 	if err != nil {
 		r.Return(err)
 		return
@@ -58,9 +70,10 @@ func (s *syscaller) writeAt(r rpc.Responder, c *rpc.Call) {
 		return
 	}
 
-	offset, ok := args[2].(uint64)
-	if !ok {
-		panic("arg 2 is not a uint64")
+	offset, err := uint64Arg(args[2])
+	if err != nil {
+		r.Return(fmt.Errorf("writeAt: arg 2: %w", err))
+		return
 	}
 
 	n, err := fs.WriteAt(f, data, int64(offset))

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"tractor.dev/toolkit-go/duplex/rpc"
 	"tractor.dev/wanix/fs"
 )
@@ -9,24 +11,32 @@ func (s *syscaller) chown(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	path, ok := args[0].(string)
-	if !ok {
-		panic("arg 0 is not a string")
+	if err := argCount(args, 3); err != nil {
+		r.Return(fmt.Errorf("chown: %w", err))
+		return
 	}
 
-	uuid, ok := args[1].(uint64)
-	if !ok {
-		panic("arg 1 is not a uint64")
+	path, err := stringArg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("chown: arg 0: %w", err))
+		return
+	}
+
+	uuid, err := uint64Arg(args[1])
+	if err != nil {
+		r.Return(fmt.Errorf("chown: arg 1: %w", err))
+		return
 	}
 	uid := int(uuid)
 
-	ugid, ok := args[2].(uint64)
-	if !ok {
-		panic("arg 2 is not a uint64")
+	ugid, err := uint64Arg(args[2])
+	if err != nil {
+		r.Return(fmt.Errorf("chown: arg 2: %w", err))
+		return
 	}
 	gid := int(ugid)
 
-	err := fs.Chown(s.task.NS(), path, uid, gid)
+	err = fs.Chown(s.task.NS(), path, uid, gid)
 	if err != nil {
 		r.Return(err)
 		return
@@ -37,21 +47,29 @@ func (s *syscaller) fchown(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	ufd, ok := args[0].(uint64)
-	if !ok {
-		panic("arg 0 is not a uint64")
+	if err := argCount(args, 3); err != nil {
+		r.Return(fmt.Errorf("fchown: %w", err))
+		return
+	}
+
+	ufd, err := uint64Arg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("fchown: arg 0: %w", err))
+		return
 	}
 	fd := int(ufd)
 
-	uuid, ok := args[1].(uint64)
-	if !ok {
-		panic("arg 1 is not a uint64")
+	uuid, err := uint64Arg(args[1])
+	if err != nil {
+		r.Return(fmt.Errorf("fchown: arg 1: %w", err))
+		return
 	}
 	uid := int(uuid)
 
-	ugid, ok := args[2].(uint64)
-	if !ok {
-		panic("arg 2 is not a uint64")
+	ugid, err := uint64Arg(args[2])
+	if err != nil {
+		r.Return(fmt.Errorf("fchown: arg 2: %w", err))
+		return
 	}
 	gid := int(ugid)
 

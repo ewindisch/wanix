@@ -8,32 +8,18 @@ import (
 	"tractor.dev/wanix/fs"
 )
 
-// unixSeconds coerces a CBOR-decoded timestamp into fractional seconds.
-// Integer-valued timestamps decode as int64/uint64 rather than float64, and
-// a failed type assertion here previously panicked and killed the runtime.
-func unixSeconds(v any) (float64, error) {
-	switch t := v.(type) {
-	case float64:
-		return t, nil
-	case float32:
-		return float64(t), nil
-	case int64:
-		return float64(t), nil
-	case uint64:
-		return float64(t), nil
-	case int:
-		return float64(t), nil
-	}
-	return 0, fmt.Errorf("expected numeric timestamp, got %T", v)
-}
-
 func (s *syscaller) chtimes(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	path, ok := args[0].(string)
-	if !ok {
-		r.Return(fmt.Errorf("chtimes: arg 0 is not a string"))
+	if err := argCount(args, 3); err != nil {
+		r.Return(fmt.Errorf("chtimes: %w", err))
+		return
+	}
+
+	path, err := stringArg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("chtimes: arg 0: %w", err))
 		return
 	}
 
