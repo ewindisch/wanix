@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"tractor.dev/toolkit-go/duplex/rpc"
 	"tractor.dev/wanix/fs"
 )
@@ -11,17 +13,24 @@ func (s *syscaller) writeFile(r rpc.Responder, c *rpc.Call) {
 
 	// log.Println("WriteFile", args)
 
-	name, ok := args[0].(string)
-	if !ok {
-		panic("arg 0 is not a string")
+	if err := argCount(args, 2); err != nil {
+		r.Return(fmt.Errorf("writeFile: %w", err))
+		return
 	}
 
-	data, ok := args[1].([]byte)
-	if !ok {
-		panic("arg 0 is not a []byte")
+	name, err := stringArg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("writeFile: arg 0: %w", err))
+		return
 	}
 
-	err := fs.WriteFile(s.task.NS(), name, data, 0x644)
+	data, err := bytesArg(args[1])
+	if err != nil {
+		r.Return(err)
+		return
+	}
+
+	err = fs.WriteFile(s.task.NS(), name, data, 0x644)
 	if err != nil {
 		r.Return(err)
 		return

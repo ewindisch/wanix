@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log"
+	"fmt"
 
 	"tractor.dev/toolkit-go/duplex/rpc"
 	"tractor.dev/wanix/fs"
@@ -11,18 +11,25 @@ func (s *syscaller) truncate(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	path, ok := args[0].(string)
-	if !ok {
-		panic("arg 0 is not a string")
+	if err := argCount(args, 2); err != nil {
+		r.Return(fmt.Errorf("truncate: %w", err))
+		return
 	}
 
-	usize, ok := args[1].(uint64)
-	if !ok {
-		log.Panicf("arg 1 is not a uint64: %T %v", args[1], args[1])
+	path, err := stringArg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("truncate: arg 0: %w", err))
+		return
+	}
+
+	usize, err := uint64Arg(args[1])
+	if err != nil {
+		r.Return(fmt.Errorf("truncate: arg 1: %w", err))
+		return
 	}
 	size := int64(usize)
 
-	err := fs.Truncate(s.task.NS(), path, size)
+	err = fs.Truncate(s.task.NS(), path, size)
 	if err != nil {
 		r.Return(err)
 		return
@@ -33,19 +40,26 @@ func (s *syscaller) ftruncate(r rpc.Responder, c *rpc.Call) {
 	var args []any
 	c.Receive(&args)
 
-	ufd, ok := args[0].(uint64)
-	if !ok {
-		panic("arg 0 is not a uint64")
+	if err := argCount(args, 2); err != nil {
+		r.Return(fmt.Errorf("ftruncate: %w", err))
+		return
+	}
+
+	ufd, err := uint64Arg(args[0])
+	if err != nil {
+		r.Return(fmt.Errorf("ftruncate: arg 0: %w", err))
+		return
 	}
 	fd := int(ufd)
 
-	usize, ok := args[1].(uint64)
-	if !ok {
-		panic("arg 1 is not a uint64")
+	usize, err := uint64Arg(args[1])
+	if err != nil {
+		r.Return(fmt.Errorf("ftruncate: arg 1: %w", err))
+		return
 	}
 	size := int64(usize)
 
-	_, path, err := s.task.FD(int(fd))
+	_, path, err := s.task.FD(fd)
 	if err != nil {
 		r.Return(err)
 		return

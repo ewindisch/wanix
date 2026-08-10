@@ -56,6 +56,11 @@ function errorMessage(e) {
 
 function errnoCode(msg) {
     const lower = msg.toLowerCase();
+    // Go *fs.PathError text crosses the API boundary verbatim, e.g.
+    // "statat <path>: no such file or directory"; without this mapping it
+    // fell through to EIO, which broke os.IsNotExist checks in u-root
+    // coreutils (cp/mv/gzip) running in the embedded shell.
+    if (lower.includes("no such file or directory")) return "ENOENT";
     if (lower.includes("does not exist") || lower.includes("not found")) return "ENOENT";
     if (lower.includes("permission denied")) return "EPERM";
     if (lower.includes("not a directory")) return "ENOTDIR";
