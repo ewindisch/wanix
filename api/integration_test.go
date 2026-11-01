@@ -1,8 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"io"
+	iofs "io/fs"
 	"testing"
+
+	"tractor.dev/wanix/fs"
+	"tractor.dev/wanix/fs/fskit"
 
 	"tractor.dev/toolkit-go/duplex/codec"
 	"tractor.dev/toolkit-go/duplex/mux"
@@ -41,6 +47,56 @@ func TestGuardRecoversPanic(t *testing.T) {
 	// The kernel must still serve subsequent calls.
 	if _, err := client.Call(ctx, "WriteFile", []any{"after.txt", []byte("ok")}); err != nil {
 		t.Fatalf("server died after a guarded panic: %v", err)
+	}
+}
+
+type stderrTestFS struct {
+	data bytes.Buffer
+}
+
+func (f *stderrTestFS) Open(name string) (iofs.File, error) {
+	if name != "." {
+		return nil, fs.ErrNotExist
+	}
+	return &stderrTestFile{owner: f}, nil
+}
+
+type stderrTestFile struct{ owner *stderrTestFS }
+
+func (f *stderrTestFile) Read([]byte) (int, error)    { return 0, io.EOF }
+func (f *stderrTestFile) Write(p []byte) (int, error) { return f.owner.data.Write(p) }
+func (f *stderrTestFile) Close() error                { return nil }
+func (f *stderrTestFile) Stat() (fs.FileInfo, error)  { return fskit.Entry("stderr", 0644), nil }
+
+func TestWriteAtRoutesTaskStderrFDToBoundStream(t *testing.T) {
+	root, err := wanix.NewRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := root.NS().Bind(memfs.New(), ".", "."); err != nil {
+		t.Fatal(err)
+	}
+	stderr := &stderrTestFS{}
+	if err := root.NS().Bind(stderr, ".", "#task/1/fd/2"); err != nil {
+		t.Fatal(err)
+	}
+
+	a, b := mux.Pair()
+	t.Cleanup(func() { a.Close(); b.Close() })
+	go Responder(a, root)
+	client := talk.NewPeer(b, codec.CBORCodec{})
+	ctx := context.Background()
+	for _, part := range []struct {
+		data   string
+		offset uint64
+	}{{"first", 0}, {"second", 5}} {
+		_, err := client.Call(ctx, "WriteAt", []any{uint64(2), []byte(part.data), part.offset})
+		if err != nil {
+			t.Fatalf("WriteAt(%q): %v", part.data, err)
+		}
+	}
+	if got := stderr.data.String(); got != "firstsecond" {
+		t.Fatalf("stderr bytes = %q, want sequential stream data", got)
 	}
 }
 
