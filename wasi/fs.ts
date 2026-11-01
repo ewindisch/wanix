@@ -100,7 +100,6 @@ export class OpenFile extends Fd {
 
 
   fd_fdstat_get(): { ret: number; fdstat: wasi.Fdstat | null } {
-    const size = this.file.handle.getSize();
     const fdstat = new wasi.Fdstat(wasi.FILETYPE_REGULAR_FILE, 0);
     if (!this.file.readonly) {
       fdstat.fs_rights_base = BigInt(wasi.RIGHTS_FD_WRITE);

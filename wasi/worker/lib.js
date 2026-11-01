@@ -3738,7 +3738,6 @@ var OpenFile2 = class extends Fd {
     return wasi_defs_exports.ERRNO_SUCCESS;
   }
   fd_fdstat_get() {
-    const size = this.file.handle.getSize();
     const fdstat = new wasi_defs_exports.Fdstat(wasi_defs_exports.FILETYPE_REGULAR_FILE, 0);
     if (!this.file.readonly) {
       fdstat.fs_rights_base = BigInt(wasi_defs_exports.RIGHTS_FD_WRITE);
