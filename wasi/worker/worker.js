@@ -38,11 +38,26 @@ function nativePathRename(wasi, caller, fd, oldPtr, oldLen, newFd, newPtr, newLe
 self.onmessage = async (e) => {
     if (e.data.worker) {
         console.log("wasi worker started");
-        await initializeSyncWorker(e);
+        try {
+            await initializeSyncWorker(e);
+        } catch (err) {
+            const fs = new WanixHandle(e.data.worker.port);
+            console.error(`WASI task ${e.data.worker.tid} startup failed:`, err);
+            await reportTaskFailure(fs, e.data.worker.tid, err);
+        }
     } else if (e.data.buffer) {
         console.log("wasi sync worker started");
-		await runWasi(e);
-	}
+        await runWasi(e);
+    }
+}
+
+async function reportTaskFailure(fs, tid, err) {
+    console.error(`WASI task ${tid} failed:`, err);
+    try {
+        await fs.writeFile(`${TASKNS}/${tid}/exit`, "1");
+    } catch (reportErr) {
+        console.error(`WASI task ${tid} could not report failure:`, reportErr);
+    }
 }
 
 async function initializeSyncWorker(e) {
@@ -50,13 +65,21 @@ async function initializeSyncWorker(e) {
     const tid = e.data.worker.tid;
     const env = (await fs.readText(`${TASKNS}/${tid}/env`)).trim().split("\n").filter(line => line.includes("="));
     const args = (await fs.readText(`${TASKNS}/${tid}/cmd`)).trim().split(" ");
-    const bin = await fs.readFile(args[0]);
+    let bin;
+    try {
+        bin = await fs.readFile(args[0]);
+    } catch (err) {
+        await reportTaskFailure(fs, tid, err);
+        return;
+    }
     const buffer = new SharedArrayBuffer(16384);
     const call = new CallBuffer(buffer);
     const worker = new Worker(e.data.worker.url, {type: "module"});
-    worker.onmessage = messageHandler(fs, call, tid); 
+    worker.onmessage = messageHandler(fs, call, tid);
+    worker.onerror = (err) => { void reportTaskFailure(fs, tid, err); };
+    worker.onmessageerror = (err) => { void reportTaskFailure(fs, tid, err); };
     worker.postMessage({
-        buffer, 
+        buffer,
         bin,
         args,
         env,

@@ -9,7 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const sourcePath = resolve(here, "../../wasi/worker/worker.js");
 let source = await readFile(sourcePath, "utf8");
 source = source.replace(/^import\s*\{[\s\S]*?\} from "\.\/lib\.js";\n/, "");
-source += "\nglobalThis.__messageHandler = messageHandler; globalThis.__nativePathRename = nativePathRename; globalThis.__runWasi = runWasi;\n";
+source += "\nglobalThis.__messageHandler = messageHandler; globalThis.__nativePathRename = nativePathRename; globalThis.__runWasi = runWasi; globalThis.__reportTaskFailure = reportTaskFailure;\n";
 let wasiFds;
 class FakeFile { constructor(handle) { this.handle = handle; } }
 class FakeFileHandle { constructor(caller, path) { this.caller = caller; this.path = path; } }
@@ -86,3 +86,7 @@ assert.equal(wasiFds.length, 4);
 assert.equal(wasiFds[0].file.handle.path, "#task/7/fd/0");
 assert.equal(wasiFds[1].file.handle.path, "#task/7/fd/1");
 assert.equal(wasiFds[2].file.handle.path, "#task/7/fd/2");
+
+const failureWrites = [];
+await context.__reportTaskFailure({ writeFile: async (...args) => failureWrites.push(args) }, "42", new Error("load failed"));
+assert.deepEqual(failureWrites, [["#task/42/exit", "1"]]);
