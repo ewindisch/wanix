@@ -4048,6 +4048,10 @@ var WanixHandle = class {
     this.logger(`read ${fd} ${count}`);
     return (await this.peer.call("Read", [fd, count])).value;
   }
+  async readAt(fd, count, offset) {
+    this.logger(`readAt ${fd} ${offset}`);
+    return (await this.peer.call("ReadAt", [fd, count, offset])).value;
+  }
   async write(fd, data) {
     this.logger(`write ${fd} len(${data.length})`);
     return (await this.peer.call("Write", [fd, data])).value;

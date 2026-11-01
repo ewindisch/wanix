@@ -55,10 +55,15 @@ await handler({ data: { method: "path_open", path: "missing" } });
 assert.equal(JSON.stringify(responses), JSON.stringify([{ __wanix_error: "Error: missing" }]));
 
 responses.length = 0;
-const workingFs = { writeAt() { return Promise.resolve(3); } };
+const reads = [];
+const workingFs = { writeAt() { return Promise.resolve(3); }, readAt(fd, count, at) { reads.push([fd, count, at]); return Promise.resolve(new Uint8Array([84])); } };
 const handler2 = handlerFactory(workingFs, call, "t");
 await handler2({ data: { method: "fd_write", fd: 4, data: new Uint8Array([1, 2, 3]), at: 0 } });
 assert.equal(JSON.stringify(responses), JSON.stringify([3]));
+responses.length = 0;
+await handler2({ data: { method: "fd_read", fd: 4, count: 1, at: 12 } });
+assert.deepEqual(reads, [[4, 1, 12]]);
+assert.deepEqual(responses, [new Uint8Array([84])]);
 
 
 responses.length = 0;

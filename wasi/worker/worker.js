@@ -148,11 +148,13 @@ function messageHandler(fs, call, tid) {
             call.respond(true);
             break;
 
-        case "fd_read":
-            // const at = e.data.at;
-            const data = await fs.read(e.data.fd, e.data.count/*, at*/);
+        case "fd_read": {
+            const data = e.data.at === undefined
+                ? await fs.read(e.data.fd, e.data.count)
+                : await fs.readAt(e.data.fd, e.data.count, e.data.at);
             call.respond(data);
             break;
+        }
 
         case "fd_write":
             // WASI supplies the file position for every write.  Use it rather
