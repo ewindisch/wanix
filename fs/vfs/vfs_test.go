@@ -332,6 +332,32 @@ func TestBindingModes(t *testing.T) {
 
 }
 
+func TestUnbindAndRebindReplacesFileBinding(t *testing.T) {
+	console := fstest.MapFS{"stream": {Data: []byte("console")}}
+	stderr := fstest.MapFS{"stream": {Data: []byte("stderr")}}
+	ns := New(context.Background())
+
+	for _, fd := range []string{"fd/0", "fd/1", "fd/2"} {
+		if err := ns.Bind(console, "stream", fd); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := ns.Unbind(ns, "fd/2", "fd/2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ns.Bind(stderr, "stream", "fd/2"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := fs.ReadFile(ns, "fd/2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "stderr" {
+		t.Fatalf("fd/2 = %q, want stderr source", got)
+	}
+}
+
 func TestSynthesizedDirectories(t *testing.T) {
 	// Create test filesystem
 	testFS := fstest.MapFS{
