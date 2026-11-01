@@ -44,7 +44,11 @@ export class CallBuffer {
         params["method"] = method;
         postMessage(params);
         Atomics.wait(this.ctrl, 0, 0);
-        return decode(this.data.slice(0, this.len[0]));
+        const value = decode(this.data.slice(0, this.len[0]));
+        if (value && value.__wanix_error) {
+            throw new Error(value.__wanix_error);
+        }
+        return value;
     }
 
 }

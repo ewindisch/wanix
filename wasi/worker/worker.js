@@ -3,7 +3,6 @@ import {
 	CallBuffer, 
 	WASI, 
     WASIProcExit,
-	OpenEmptyFile,
 	OpenFile,
 	File,
 	FileHandle,
@@ -15,6 +14,26 @@ import {
 } from "./lib.js";
 
 const TASKNS = "#task";
+
+// Native rename adapter used by the WASI import. It performs no unlink before
+// the backend confirms the rename, so failures preserve the source.
+function nativePathRename(wasi, caller, fd, oldPtr, oldLen, newFd, newPtr, newLen) {
+    const mem = new Uint8Array(wasi.inst.exports.memory.buffer);
+    const oldPathRaw = new TextDecoder().decode(mem.slice(oldPtr, oldPtr + oldLen));
+    const newPathRaw = new TextDecoder().decode(mem.slice(newPtr, newPtr + newLen));
+    if (fd !== 3 || newFd !== 3) return 76; // ERRNO_NOTCAPABLE
+    const relative = (value) => {
+        const parts = value.split("/");
+        if (parts.some((part) => part === "..")) throw new Error("invalid path");
+        return parts.filter((part) => part !== "").join("/");
+    };
+    try {
+        caller.call("path_rename", {from: relative(oldPathRaw), to: relative(newPathRaw)});
+        return 0;
+    } catch (_) { return 6; } // ERRNO_IO
+}
+
+
 
 self.onmessage = async (e) => {
     if (e.data.worker) {
@@ -54,6 +73,7 @@ function messageHandler(fs, call, tid) {
         }
         console.log(e.data);
         // const start = performance.now();
+        try {
         switch (e.data.method) {
         case "path_open":
             const fd = await fs.open(e.data.path);
@@ -77,6 +97,11 @@ function messageHandler(fs, call, tid) {
 
         case "path_remove":
             await fs.remove(e.data.path);
+            call.respond(true);
+            break;
+
+        case "path_rename":
+            await fs.rename(e.data.from, e.data.to);
             call.respond(true);
             break;
 
@@ -123,6 +148,10 @@ function messageHandler(fs, call, tid) {
         
         default:
             console.warn(`unknown method: ${e.data.method}`);
+            call.respond({__wanix_error: `unsupported method: ${e.data.method}`});
+        }
+        } catch (err) {
+            call.respond({__wanix_error: err instanceof Error ? err.message : String(err)});
         }
         // console.log(performance.now() - start);
     }
@@ -132,8 +161,7 @@ function messageHandler(fs, call, tid) {
 async function runWasi(e) {
 	const caller = new CallBuffer(e.data.buffer);
 	const wasi = new WASI(e.data.args, e.data.env, [
-		new OpenEmptyFile(),
-		// new OpenFile(new File(new FileHandle(caller, e.data.stdin))),
+		new OpenFile(new File(new FileHandle(caller, e.data.stdin))),
 		new OpenFile(new File(new FileHandle(caller, e.data.stdout))),
 		new OpenFile(new File(new FileHandle(caller, e.data.stderr))),
 		new PreopenDirectory("/", new Directory(new DirectoryHandle(caller, "."))),
@@ -154,8 +182,12 @@ async function runWasi(e) {
         return 0;
     };
 
+    const nativePathRenameImport = (fd, oldPtr, oldLen, newFd, newPtr, newLen) =>
+        nativePathRename(wasi, caller, fd, oldPtr, oldLen, newFd, newPtr, newLen);
+
 	const wrapped = new Proxy(wasi.wasiImport, {
 		get(target, name) {
+          if (name === "path_rename") return nativePathRenameImport;
 		  const fn = target[name];
 		  if (typeof fn !== "function") return fn;
 		  return (...args) => {
