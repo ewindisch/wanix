@@ -2309,11 +2309,13 @@ var CallBuffer = class {
   }
   respond(value) {
     let buf;
-    if (value instanceof Uint8Array) {
-      const limit = Math.min(value.length, this.maxData);
-      buf = encode(value.slice(0, limit));
+    if (value instanceof Uint8Array && value.byteLength > this.maxData) {
+      buf = encode({ __wanix_error: `CallBuffer response too large: ${value.byteLength} bytes exceeds ${this.maxData}-byte limit` });
     } else {
       buf = encode(value);
+    }
+    if (buf.byteLength > this.data.byteLength) {
+      buf = encode({ __wanix_error: `CallBuffer encoded response too large: ${buf.byteLength} bytes exceeds ${this.data.byteLength}-byte limit` });
     }
     this.len[0] = buf.length;
     this.data.set(buf, 0);
