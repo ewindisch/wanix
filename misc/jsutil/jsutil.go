@@ -15,6 +15,11 @@ func Log(args ...any) {
 	js.Global().Get("console").Call("log", args...)
 }
 
+// LogError writes a line to the browser's distinct stderr console channel.
+func LogError(args ...any) {
+	js.Global().Get("console").Call("error", args...)
+}
+
 func Get(path string) (v js.Value) {
 	parts := strings.Split(path, ".")
 	v = js.Global()
