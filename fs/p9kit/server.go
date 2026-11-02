@@ -44,7 +44,7 @@ func Attacher(fsys fs.FS, options ...AttacherOption) p9.Attacher {
 
 // Attach implements p9.Attacher.Attach.
 func (a *attacher) Attach() (p9.File, error) {
-	return &p9file{path: ".", fsys: a.FS, vattrs: a.vattrs}, nil
+	return &p9file{path: ".", fsys: a.FS, vattrs: a.vattrs, ctx: fs.ContextFor(a.FS)}, nil
 }
 
 func toQid(name string, _ fs.FileInfo) (uint64, error) {
@@ -59,6 +59,7 @@ type p9file struct {
 	path      string
 	file      fs.File
 	fsys      fs.FS
+	ctx       context.Context
 	openFlags p9.OpenFlags
 	vattrs    VirtualAttrStore // nil means no virtual attributes
 }
@@ -80,7 +81,7 @@ func (l *p9file) info() (p9.QID, fs.FileInfo, error) {
 	if l.file != nil {
 		fi, err = l.file.Stat()
 	} else {
-		ctx := context.Background()
+		ctx := l.ctx
 		fi, err = fs.StatContext(fs.WithNoFollow(ctx), l.fsys, l.path)
 		if err != nil {
 			return qid, nil, err
@@ -113,7 +114,7 @@ func (l *p9file) info() (p9.QID, fs.FileInfo, error) {
 func (l *p9file) Walk(names []string) ([]p9.QID, p9.File, error) {
 	// log.Println("server walk:", l.path, names)
 	var qids []p9.QID
-	last := &p9file{path: l.path, fsys: l.fsys, vattrs: l.vattrs}
+	last := &p9file{path: l.path, fsys: l.fsys, ctx: l.ctx, vattrs: l.vattrs}
 
 	// A walk with no names is a copy of self.
 	if len(names) == 0 {
@@ -121,7 +122,7 @@ func (l *p9file) Walk(names []string) ([]p9.QID, p9.File, error) {
 	}
 
 	for _, name := range names {
-		c := &p9file{path: path.Clean(path.Join(last.path, name)), fsys: l.fsys, vattrs: l.vattrs}
+		c := &p9file{path: path.Clean(path.Join(last.path, name)), fsys: l.fsys, ctx: l.ctx, vattrs: l.vattrs}
 		qid, _, err := c.info()
 		if err != nil {
 			return nil, nil, err
@@ -219,7 +220,7 @@ func (l *p9file) Create(name string, mode p9.OpenFlags, permissions p9.FileMode,
 
 	l.setNewOwner(newName, uid, gid)
 
-	l2 := &p9file{path: newName, file: f, fsys: l.fsys, vattrs: l.vattrs, openFlags: mode}
+	l2 := &p9file{path: newName, file: f, fsys: l.fsys, ctx: l.ctx, vattrs: l.vattrs, openFlags: mode}
 	qid, _, err := l2.info()
 	if err != nil {
 		l2.Close()
@@ -269,7 +270,7 @@ func (l *p9file) Mkdir(name string, permissions p9.FileMode, uid p9.UID, gid p9.
 
 	l.setNewOwner(newPath, uid, gid)
 
-	child := &p9file{path: newPath, fsys: l.fsys, vattrs: l.vattrs}
+	child := &p9file{path: newPath, fsys: l.fsys, ctx: l.ctx, vattrs: l.vattrs}
 	qid, _, err := child.info()
 	return qid, err
 }
@@ -322,7 +323,7 @@ func (l *p9file) UnlinkAt(name string, flags uint32) error {
 	fullPath := path.Join(l.path, name)
 
 	// Check if the target is a directory
-	info, err := fs.StatContext(fs.WithNoFollow(context.Background()), l.fsys, fullPath)
+	info, err := fs.StatContext(fs.WithNoFollow(l.ctx), l.fsys, fullPath)
 	if err != nil {
 		return err
 	}
@@ -370,7 +371,7 @@ func (l *p9file) Readdir(offset uint64, count uint32) (dents p9.Dirents, derr er
 		seenNames = make(map[string]bool) // Track seen entry names to detect duplicates
 	)
 
-	entries, err := fs.ReadDir(l.fsys, l.path)
+	entries, err := fs.ReadDirContext(l.ctx, l.fsys, l.path)
 	if err != nil {
 		return nil, err
 	}
@@ -436,21 +437,21 @@ func qidTypeToDirentType(qtype p9.QIDType) p9.QIDType {
 }
 
 func (l *p9file) SetXattr(attr string, data []byte, flags p9.XattrFlags) error {
-	ctx := fs.WithNoFollow(context.Background())
+	ctx := fs.WithNoFollow(l.ctx)
 	return fs.SetXattr(ctx, l.fsys, l.path, attr, data, int(flags))
 }
 
 func (l *p9file) GetXattr(attr string) ([]byte, error) {
-	ctx := fs.WithNoFollow(context.Background())
+	ctx := fs.WithNoFollow(l.ctx)
 	return fs.GetXattr(ctx, l.fsys, l.path, attr)
 }
 
 func (l *p9file) ListXattrs() ([]string, error) {
-	ctx := fs.WithNoFollow(context.Background())
+	ctx := fs.WithNoFollow(l.ctx)
 	return fs.ListXattrs(ctx, l.fsys, l.path)
 }
 
 func (l *p9file) RemoveXattr(attr string) error {
-	ctx := fs.WithNoFollow(context.Background())
+	ctx := fs.WithNoFollow(l.ctx)
 	return fs.RemoveXattr(ctx, l.fsys, l.path, attr)
 }
