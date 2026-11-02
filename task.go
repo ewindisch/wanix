@@ -471,6 +471,12 @@ func (d *TaskFS) vfsNS(ctx context.Context) (*vfs.NS, error) {
 }
 
 func (d *TaskFS) Route(ctx context.Context, name string) (fs.FS, string, error) {
+	// Keep the task filesystem itself mounted at its root. Resolving the root
+	// to a vfs.NS here would capture the binding-time task context and make
+	// #task/self refer to that task for every namespace using this mount.
+	if name == "." {
+		return d, name, nil
+	}
 	ns, err := d.vfsNS(ctx)
 	if err != nil {
 		return nil, "", err
