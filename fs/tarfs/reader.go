@@ -46,8 +46,9 @@ func From(t *tar.Reader) (*Reader, error) {
 			fsys.files[d] = make(map[string]*File)
 		}
 		if header.Typeflag == tar.TypeDir {
-			if _, ok := fsys.files[header.Name]; !ok {
-				fsys.files[header.Name] = make(map[string]*File)
+			dir := path.Join(splitpath(header.Name))
+			if _, ok := fsys.files[dir]; !ok {
+				fsys.files[dir] = make(map[string]*File)
 			}
 		}
 
