@@ -521,16 +521,7 @@ function createStructureReader(structure) {
         return compiledReader(read);
       compiledReader = compiledReader.next;
     }
-    if (this.slowReads++ >= inlineObjectReadThreshold) {
-      let array = this.length == length ? this : this.slice(0, length);
-      compiledReader = currentDecoder.keyMap ? new Function("r", "return {" + array.map((k) => currentDecoder.decodeKey(k)).map((k) => validName.test(k) ? safeKey(k) + ":r()" : "[" + JSON.stringify(k) + "]:r()").join(",") + "}") : new Function("r", "return {" + array.map((key) => validName.test(key) ? safeKey(key) + ":r()" : "[" + JSON.stringify(key) + "]:r()").join(",") + "}");
-      if (this.compiledReader)
-        compiledReader.next = this.compiledReader;
-      compiledReader.propertyCount = length;
-      this.compiledReader = compiledReader;
-      return compiledReader(read);
-    }
-    let object = {};
+        let object = {};
     if (currentDecoder.keyMap) for (let i = 0; i < length; i++) object[safeKey(currentDecoder.decodeKey(this[i]))] = read();
     else for (let i = 0; i < length; i++) {
       object[safeKey(this[i])] = read();
@@ -4921,7 +4912,6 @@ function read2() {
       throw new Error("Unknown CBOR token " + token);
   }
 }
-var validName2 = /^[a-zA-Z_$][a-zA-Z\d_$]*$/;
 function createStructureReader2(structure) {
   function readObject() {
     let length = src2[position3++];
@@ -4948,15 +4938,6 @@ function createStructureReader2(structure) {
       if (compiledReader.propertyCount === length)
         return compiledReader(read2);
       compiledReader = compiledReader.next;
-    }
-    if (this.slowReads++ >= 3) {
-      let array = this.length == length ? this : this.slice(0, length);
-      compiledReader = currentDecoder2.keyMap ? new Function("r", "return {" + array.map((k) => currentDecoder2.decodeKey(k)).map((k) => validName2.test(k) ? safeKey2(k) + ":r()" : "[" + JSON.stringify(k) + "]:r()").join(",") + "}") : new Function("r", "return {" + array.map((key) => validName2.test(key) ? safeKey2(key) + ":r()" : "[" + JSON.stringify(key) + "]:r()").join(",") + "}");
-      if (this.compiledReader)
-        compiledReader.next = this.compiledReader;
-      compiledReader.propertyCount = length;
-      this.compiledReader = compiledReader;
-      return compiledReader(read2);
     }
     let object = {};
     if (currentDecoder2.keyMap)

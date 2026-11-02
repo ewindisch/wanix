@@ -486,7 +486,6 @@ function read() {
       throw new Error("Unknown CBOR token " + token);
   }
 }
-var validName = /^[a-zA-Z_$][a-zA-Z\d_$]*$/;
 function createStructureReader(structure) {
   function readObject() {
     let length = src[position++];
@@ -513,15 +512,6 @@ function createStructureReader(structure) {
       if (compiledReader.propertyCount === length)
         return compiledReader(read);
       compiledReader = compiledReader.next;
-    }
-    if (this.slowReads++ >= 3) {
-      let array = this.length == length ? this : this.slice(0, length);
-      compiledReader = currentDecoder.keyMap ? new Function("r", "return {" + array.map((k) => currentDecoder.decodeKey(k)).map((k) => validName.test(k) ? safeKey(k) + ":r()" : "[" + JSON.stringify(k) + "]:r()").join(",") + "}") : new Function("r", "return {" + array.map((key) => validName.test(key) ? safeKey(key) + ":r()" : "[" + JSON.stringify(key) + "]:r()").join(",") + "}");
-      if (this.compiledReader)
-        compiledReader.next = this.compiledReader;
-      compiledReader.propertyCount = length;
-      this.compiledReader = compiledReader;
-      return compiledReader(read);
     }
     let object = {};
     if (currentDecoder.keyMap)
