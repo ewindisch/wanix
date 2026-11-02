@@ -4,6 +4,7 @@ package tarfs
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -38,23 +39,31 @@ func From(t *tar.Reader) (*Reader, error) {
 			return nil, err
 		}
 
-		d, f := splitpath(hdr.Name)
+		// archive/tar.Reader reuses its Header on the next iteration.
+		header := *hdr
+		d, f := splitpath(header.Name)
 		if _, ok := fsys.files[d]; !ok {
 			fsys.files[d] = make(map[string]*File)
 		}
-
-		var buf bytes.Buffer
-		size, err := buf.ReadFrom(t)
-		if err != nil {
-			panic("tarfs: reading from tar:" + err.Error())
+		if header.Typeflag == tar.TypeDir {
+			if _, ok := fsys.files[header.Name]; !ok {
+				fsys.files[header.Name] = make(map[string]*File)
+			}
 		}
 
-		if size != hdr.Size {
-			panic("tarfs: size mismatch")
+		var buf bytes.Buffer
+		if header.Size > 0 {
+			size, err := buf.ReadFrom(t)
+			if err != nil {
+				return nil, err
+			}
+			if size != header.Size {
+				return nil, fmt.Errorf("tarfs: size mismatch for %q: got %d, want %d", header.Name, size, header.Size)
+			}
 		}
 
 		file := &File{
-			h:    hdr,
+			h:    &header,
 			data: bytes.NewReader(buf.Bytes()),
 			fs:   fsys,
 		}

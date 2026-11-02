@@ -127,6 +127,12 @@ func (ns *NS) StatContext(ctx context.Context, name string) (fs.FileInfo, error)
 		}
 	}
 
+	// A bind at a nested path implies that its parent components are
+	// directories, even when those directories are not present in any mount.
+	if hasBindsUnder(b, name) {
+		return synthDir(path.Base(name)), nil
+	}
+
 	// Routing may hand name to a binding that doesn't contain it even though
 	// name is a synthesized parent of deeper binds (as OpenContext would
 	// produce), so fall back to that before reporting not-exist.
